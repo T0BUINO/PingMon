@@ -210,6 +210,9 @@ func TestDashboardChartsUseConsistentAggregatedData(t *testing.T) {
 	if strings.Contains(dashboardJS, "applyLiveResults(message.results)") {
 		t.Fatal("dashboard still mixes raw websocket points into aggregated chart data")
 	}
+	if strings.Contains(dashboardJS, "cacheState") {
+		t.Fatal("landing mini chart still references an undefined cacheState")
+	}
 }
 
 func TestWebSocketBroadcast(t *testing.T) {

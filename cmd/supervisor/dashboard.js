@@ -1082,9 +1082,6 @@ function normalizeResultRow(row) {
         const chartSurface = card.querySelector('.mini-chart');
         if (agentRows.length) {
           queueMiniChart(chartSurface, agent);
-        } else if (cacheState === 'building' || cacheState === 'none') {
-          destroyMiniChartSurface(chartSurface);
-          chartSurface.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px">缓存生成中&hellip;</div>';
         } else {
           destroyMiniChartSurface(chartSurface);
           chartSurface.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--muted);font-size:12px">暂无数据</div>';
