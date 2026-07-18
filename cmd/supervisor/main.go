@@ -97,6 +97,7 @@ const resultsCacheMaxBytes = 16 << 20
 const dashboardSessionLifetime = 12 * time.Hour
 const maxReportBodyBytes = 1 << 20
 const maxReportBatchSize = 1000
+const storageCheckpointInterval = 5 * time.Minute
 
 var websocketUpgrader = websocket.Upgrader{
 	HandshakeTimeout: 5 * time.Second,
@@ -163,6 +164,7 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 	go s.startRetentionCleaner(ctx)
+	go s.startStorageCheckpointer(ctx)
 	go s.watchConfig(ctx, *configPath, *format)
 
 	mux := newSupervisorMux(s)
@@ -1110,6 +1112,29 @@ func (s *server) startRetentionCleaner(ctx context.Context) {
 			return
 		case <-ticker.C:
 			s.cleanOldData()
+		}
+	}
+}
+
+func (s *server) startStorageCheckpointer(ctx context.Context) {
+	checkpointer, ok := s.store.(interface{ Checkpoint() error })
+	if !ok {
+		return
+	}
+	run := func() {
+		if err := checkpointer.Checkpoint(); err != nil {
+			log.Printf("sqlite WAL checkpoint deferred: %v", err)
+		}
+	}
+	run()
+	ticker := time.NewTicker(storageCheckpointInterval)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-ticker.C:
+			run()
 		}
 	}
 }

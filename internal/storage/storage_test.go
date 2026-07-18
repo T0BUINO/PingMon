@@ -2,6 +2,7 @@ package storage
 
 import (
 	"database/sql"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -57,6 +58,45 @@ func TestSQLiteStoreUsesBoundedConnectionPool(t *testing.T) {
 	}
 	if cacheSize != -8192 {
 		t.Fatalf("cache_size = %d, want -8192", cacheSize)
+	}
+	var journalSizeLimit int64
+	if err := store.db.QueryRow("PRAGMA journal_size_limit").Scan(&journalSizeLimit); err != nil {
+		t.Fatalf("PRAGMA journal_size_limit: %v", err)
+	}
+	if journalSizeLimit != 8<<20 {
+		t.Fatalf("journal_size_limit = %d, want %d", journalSizeLimit, 8<<20)
+	}
+}
+
+func TestSQLiteStoreCheckpointTruncatesWAL(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "pingmon.db")
+	store, err := NewSQLiteStore(path)
+	if err != nil {
+		t.Fatalf("NewSQLiteStore: %v", err)
+	}
+	defer store.db.Close()
+
+	if _, err := store.db.Exec(`INSERT INTO agent_statuses (agent, agent_ip, first_seen_at, last_seen_at)
+VALUES ('agent-1', '192.0.2.1', '2026-07-18T00:00:00Z', '2026-07-18T00:00:00Z')`); err != nil {
+		t.Fatalf("insert heartbeat: %v", err)
+	}
+	before, err := os.Stat(path + "-wal")
+	if err != nil {
+		t.Fatalf("stat WAL before checkpoint: %v", err)
+	}
+	if before.Size() == 0 {
+		t.Fatal("WAL is empty before checkpoint")
+	}
+
+	if err := store.Checkpoint(); err != nil {
+		t.Fatalf("Checkpoint: %v", err)
+	}
+	info, err := os.Stat(path + "-wal")
+	if err != nil {
+		t.Fatalf("stat WAL after checkpoint: %v", err)
+	}
+	if info.Size() != 0 {
+		t.Fatalf("WAL size after checkpoint = %d, want 0", info.Size())
 	}
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -74,10 +75,30 @@ func sqliteDSN(path string) string {
 	q.Add("_pragma", "temp_store(FILE)")
 	q.Add("_pragma", "cache_size(-8192)")
 	q.Add("_pragma", "wal_autocheckpoint(1000)")
+	q.Add("_pragma", "journal_size_limit(8388608)")
 	return path + "?" + q.Encode()
 }
 
-func (s *SQLiteStore) Close() error                          { return s.db.Close() }
+func (s *SQLiteStore) Close() error {
+	checkpointErr := s.Checkpoint()
+	return errors.Join(checkpointErr, s.db.Close())
+}
+
+// Checkpoint copies committed WAL pages into the main database and truncates
+// the WAL file. SQLite normally reuses a checkpointed WAL without changing its
+// file size, so an occasional truncating checkpoint keeps the on-disk sidecar
+// bounded and makes clean shutdowns leave no stale WAL allocation behind.
+func (s *SQLiteStore) Checkpoint() error {
+	var busy, logFrames, checkpointedFrames int
+	if err := s.db.QueryRow("PRAGMA wal_checkpoint(TRUNCATE)").Scan(&busy, &logFrames, &checkpointedFrames); err != nil {
+		return fmt.Errorf("checkpoint sqlite WAL: %w", err)
+	}
+	if busy != 0 {
+		return fmt.Errorf("checkpoint sqlite WAL busy: log_frames=%d checkpointed_frames=%d", logFrames, checkpointedFrames)
+	}
+	return nil
+}
+
 func (s *SQLiteStore) PingContext(ctx context.Context) error { return s.db.PingContext(ctx) }
 
 func (s *SQLiteStore) init() error {

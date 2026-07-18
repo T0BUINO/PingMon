@@ -466,7 +466,10 @@ function normalizeResultRow(row) {
           const dpr = window.devicePixelRatio || 1;
           this.canvas.width = Math.round(area.width * dpr);
           this.canvas.height = Math.round(area.height * dpr);
-          this.canvas.style.width = area.width + 'px';
+          // Keep the CSS width fluid. An old pixel width becomes the canvas'
+          // min-content width and can force a single-column mobile card wider
+          // than the viewport after a resize or a landing-page refresh.
+          this.canvas.style.width = '100%';
           this.canvas.style.height = area.height + 'px';
           const ctx = this.ctx;
           ctx.setTransform(dpr, 0, 0, dpr, 0, 0);

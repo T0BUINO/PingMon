@@ -194,6 +194,23 @@ func TestMiniChartTouchGesturePolicy(t *testing.T) {
 	}
 }
 
+func TestMiniChartCardsCannotExpandMobileGrid(t *testing.T) {
+	for _, want := range []string{
+		".cards { display: grid; width: 100%; min-width: 0;",
+		".agent-card { display: block; width: 100%; min-width: 0; max-width: 100%;",
+		".cards { grid-template-columns: minmax(0, 1fr); }",
+		".chart-surface canvas { display: block; width: 100%; max-width: 100%;",
+		"this.canvas.style.width = '100%';",
+	} {
+		if !strings.Contains(dashboardCSS+dashboardJS, want) {
+			t.Fatalf("dashboard assets missing mobile overflow guard %q", want)
+		}
+	}
+	if strings.Contains(dashboardJS, "this.canvas.style.width = area.width + 'px';") {
+		t.Fatal("chart canvas still freezes its CSS width to a stale pixel value")
+	}
+}
+
 func TestDashboardChartsUseConsistentAggregatedData(t *testing.T) {
 	for _, want := range []string{
 		"async function loadResults(agent = selectedAgent)",
